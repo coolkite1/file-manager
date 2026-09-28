@@ -13,6 +13,56 @@ header { margin-bottom: 20px; }
 h1 { font-size: 22px; margin-bottom: 6px; }
 .sub { color: #52606d; }
 
+/* 页签 */
+.tabs { display: flex; gap: 8px; margin-top: 12px; border-bottom: 1px solid #e4e7eb; }
+.tab {
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  padding: 8px 18px;
+  font-size: 15px;
+  color: #52606d;
+}
+.tab.active { color: #1a73e8; border-bottom-color: #1a73e8; font-weight: bold; }
+.tab:hover:not(:disabled) { background: transparent; }
+
+/* 打包项目页 */
+.panel-grid { display: flex; gap: 14px; margin-bottom: 4px; }
+.panel {
+  flex: 1;
+  border: 1px solid #e4e7eb;
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: #fafbfc;
+  min-width: 0;
+}
+.panel h3 { font-size: 13.5px; margin-bottom: 8px; color: #3e4c59; }
+.file-list {
+  list-style: none;
+  max-height: 200px;
+  overflow: auto;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 12px;
+  color: #52606d;
+  line-height: 1.7;
+}
+.file-list li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.inline-check { display: inline-flex; align-items: center; gap: 6px; width: auto; color: #52606d; }
+.build-log {
+  background: #1f2933;
+  color: #cbd2d9;
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 12px;
+  max-height: 280px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin-top: 12px;
+}
+
 .step {
   background: #fff;
   border: 1px solid #e4e7eb;
@@ -62,6 +112,31 @@ button.ghost { background: transparent; }
   margin-bottom: 12px;
   color: #1a56b0;
 }
+
+/* 分类筛选 */
+.filters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.filter-label { color: #52606d; flex-shrink: 0; }
+.chip {
+  padding: 4px 12px;
+  border: 1px solid #1a73e8;
+  border-radius: 14px;
+  background: #e8f0fe;
+  color: #1a56b0;
+  cursor: pointer;
+  font-size: 12.5px;
+}
+.chip.off {
+  background: #f0f2f5;
+  border-color: #cbd2d9;
+  color: #7b8794;
+  text-decoration: line-through;
+}
+
+/* 选择列与排除样式 */
+.col-check { width: 44px; }
+td.check { text-align: center; }
+tr.excluded td { opacity: 0.4; }
+.selection-info { color: #52606d; font-size: 13px; margin-right: auto; }
 
 .table-wrap { max-height: 300px; overflow: auto; border: 1px solid #e4e7eb; border-radius: 8px; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }

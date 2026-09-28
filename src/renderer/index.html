@@ -10,9 +10,14 @@
   <header>
     <h1>📁 文件整理助手</h1>
     <p class="sub">选择文件夹 → 预览整理结果 → 确认后复制到新位置。原文件始终保留。</p>
+    <div class="tabs">
+      <button id="tab-files" class="tab active">文件整理</button>
+      <button id="tab-pack" class="tab">打包项目</button>
+    </div>
   </header>
 
   <main>
+    <div id="page-files">
     <!-- 第一步：选择文件夹 -->
     <section class="step" id="step-select">
       <div class="row">
@@ -34,13 +39,22 @@
     <!-- 第二步：预览 -->
     <section class="step" id="step-preview" hidden>
       <div class="summary" id="summary"></div>
+      <div class="filters">
+        <span class="filter-label">按分类筛选：</span>
+        <span id="category-filters"></span>
+      </div>
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>原文件</th><th>分类</th><th>整理后位置</th><th>备注</th></tr>
+            <tr><th class="col-check">选择</th><th>原文件</th><th>分类</th><th>整理后位置</th><th>备注</th></tr>
           </thead>
           <tbody id="preview-body"></tbody>
         </table>
+      </div>
+      <div class="row actions">
+        <span class="selection-info" id="selection-info"></span>
+        <button id="btn-select-all" class="ghost">全选</button>
+        <button id="btn-select-none" class="ghost">全不选</button>
       </div>
       <div class="row actions">
         <button id="btn-execute" class="primary">确认整理（复制到新位置）</button>
@@ -60,6 +74,52 @@
     </section>
 
     <div id="status" class="status"></div>
+    </div>
+
+    <!-- 页面二：打包项目 -->
+    <div id="page-pack" hidden>
+      <section class="step">
+        <div class="row">
+          <label>① 项目文件夹</label>
+          <input id="pack-project-dir" readonly placeholder="选择要打包的项目文件夹" />
+          <button id="btn-pack-select">选择文件夹</button>
+          <button id="btn-pack-check" class="primary" disabled>② 检查项目</button>
+        </div>
+        <p class="hint">支持 Electron 项目：自动识别打包所需文件（如 src、package.json），排除 node_modules 等。本机需已安装 Node.js。</p>
+      </section>
+
+      <section class="step" id="pack-check-panel" hidden>
+        <div class="summary" id="pack-check-summary"></div>
+        <div class="panel-grid">
+          <div class="panel">
+            <h3>将打包的文件（<span id="pack-matched-count">0</span> 个，最多显示 20 个）</h3>
+            <ul id="pack-matched-list" class="file-list"></ul>
+          </div>
+          <div class="panel">
+            <h3>自动排除</h3>
+            <ul id="pack-excluded-list" class="file-list"></ul>
+          </div>
+        </div>
+        <div class="row actions">
+          <label class="inline-check"><input type="checkbox" id="pack-auto-install" checked /> 缺少依赖时自动执行 npm install</label>
+          <button id="btn-pack-build" class="primary">开始打包</button>
+          <button id="btn-pack-cancel" class="danger" hidden>取消打包</button>
+        </div>
+      </section>
+
+      <section class="step" id="pack-build-panel" hidden>
+        <pre id="pack-log" class="build-log"></pre>
+        <div id="pack-result" hidden>
+          <h3 id="pack-result-title"></h3>
+          <ul id="pack-artifacts" class="file-list"></ul>
+          <div class="row actions">
+            <button id="btn-pack-open" class="primary">打开产物文件夹</button>
+            <button id="btn-pack-again" class="ghost">再次打包</button>
+          </div>
+        </div>
+      </section>
+      <div id="pack-status" class="status"></div>
+    </div>
   </main>
 
   <script src="renderer.js"></script>
