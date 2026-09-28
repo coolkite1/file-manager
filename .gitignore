@@ -2,3 +2,7 @@ node_modules/
 release/
 screenshots/
 *.log
+
+# 文档转换测试产物
+test-data/文档示例.pdf
+test-data/文档示例 (2).docx

@@ -278,11 +278,14 @@ function setPackStatus(text, kind) {
 function switchTab(page) {
   $('tab-files').classList.toggle('active', page === 'files');
   $('tab-pack').classList.toggle('active', page === 'pack');
+  $('tab-conv').classList.toggle('active', page === 'conv');
   $('page-files').hidden = page !== 'files';
   $('page-pack').hidden = page !== 'pack';
+  $('page-conv').hidden = page !== 'conv';
 }
 $('tab-files').addEventListener('click', () => switchTab('files'));
 $('tab-pack').addEventListener('click', () => switchTab('pack'));
+$('tab-conv').addEventListener('click', () => switchTab('conv'));
 
 // 选择项目文件夹
 $('btn-pack-select').addEventListener('click', async () => {
@@ -389,4 +392,122 @@ $('btn-pack-open').addEventListener('click', async () => {
 $('btn-pack-again').addEventListener('click', () => {
   $('pack-build-panel').hidden = true;
   $('btn-pack-build').disabled = false;
+});
+
+// ---------- 页面三：文档转换（PDF ⇄ Word） ----------
+
+const conv = { file: null, info: null, lastOut: null };
+
+function setConvStatus(text, kind) {
+  const el = $('conv-status');
+  el.textContent = text;
+  el.className = 'status show ' + (kind || 'info');
+}
+
+// 选择文档
+$('btn-conv-select').addEventListener('click', async () => {
+  const f = await window.api.selectFile('选择文档');
+  if (f) await loadConvFile(f);
+});
+
+async function loadConvFile(filePath) {
+  const info = await window.api.fileInfo(filePath);
+  if (info.kind === 'unknown') {
+    setConvStatus('仅支持 PDF 或 Word（.docx）文件。', 'error');
+    return;
+  }
+  conv.file = filePath;
+  conv.info = info;
+  conv.lastOut = null;
+  $('conv-file').value = filePath;
+  $('conv-result-panel').hidden = true;
+  $('btn-conv-go').textContent = info.kind === 'pdf' ? '② 转换为 Word (.docx)' : '② 转换为 PDF';
+  $('btn-conv-go').disabled = false;
+  $('conv-hint').textContent = info.kind === 'pdf'
+    ? 'PDF → Word 为文字版转换：提取全部文字重建为 Word 文档，图片与复杂排版不保留'
+    : 'Word → PDF：保留文字、标题、表格与图片的基本排版';
+  setConvStatus('');
+  await previewConv(filePath, info.kind);
+}
+
+// 预览：PDF 用 pdf.js 渲染页面，Word 用 mammoth 转 HTML 显示
+async function previewConv(filePath, kind) {
+  const panel = $('conv-preview-panel');
+  const box = $('conv-preview');
+  box.textContent = '';
+  $('conv-preview-title').textContent = conv.info.name;
+  panel.hidden = false;
+  if (kind === 'pdf') {
+    box.className = 'conv-preview';
+    setConvStatus('正在渲染 PDF 预览……', 'info');
+    try {
+      // pdf.js 6.x 的构建包含 import.meta，必须以 ES 模块方式创建 worker：
+      // 用 Blob URL + type:'module' 自己创建 Worker，再通过 workerPort 交给 pdf.js
+      const workerText = await window.api.pdfWorkerText();
+      const workerUrl = URL.createObjectURL(new Blob([workerText], { type: 'text/javascript' }));
+      window.pdfjsLib.GlobalWorkerOptions.workerPort = new Worker(workerUrl, { type: 'module' });
+      const b64 = await window.api.fileData(filePath);
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+      const doc = await window.pdfjsLib.getDocument({ data: bytes }).promise;
+      for (let i = 1; i <= doc.numPages; i += 1) {
+        const page = await doc.getPage(i);
+        const viewport = page.getViewport({ scale: 1.3 });
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        box.append(canvas);
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+      }
+      setConvStatus(`预览就绪：共 ${doc.numPages} 页`, 'success');
+    } catch (err) {
+      setConvStatus('预览失败：' + err.message, 'error');
+    }
+  } else {
+    box.className = 'conv-preview doc';
+    setConvStatus('正在解析 Word 文档……', 'info');
+    try {
+      const html = await window.api.docxToHtml(filePath);
+      box.innerHTML = html;
+      setConvStatus('预览就绪', 'success');
+    } catch (err) {
+      setConvStatus('预览失败：' + err.message, 'error');
+    }
+  }
+}
+
+// 执行转换
+$('btn-conv-go').addEventListener('click', async () => {
+  $('btn-conv-go').disabled = true;
+  setConvStatus(conv.info.kind === 'pdf' ? '正在转换 PDF → Word……' : '正在转换 Word → PDF……', 'info');
+  try {
+    const r = conv.info.kind === 'pdf'
+      ? await window.api.pdfToDocx(conv.file)
+      : await window.api.docxToPdf(conv.file);
+    conv.lastOut = r.outPath;
+    const extra = r.pages ? `（提取 ${r.pages} 页、${r.lines} 行文字）` : '';
+    $('conv-result-text').textContent = `✔ 转换完成：${r.outPath}${extra}`;
+    $('conv-result-panel').hidden = false;
+    setConvStatus('转换完成', 'success');
+  } catch (err) {
+    setConvStatus('转换失败：' + err.message, 'error');
+  } finally {
+    $('btn-conv-go').disabled = false;
+  }
+});
+
+// 预览转换结果 / 打开所在文件夹 / 转换其他文件
+$('btn-conv-preview').addEventListener('click', async () => {
+  if (conv.lastOut) await loadConvFile(conv.lastOut);
+});
+$('btn-conv-open').addEventListener('click', async () => {
+  if (conv.lastOut) {
+    const r = await window.api.openFolder(conv.lastOut.replace(/[\\/][^\\/]+$/, ''));
+    if (!r.ok) setConvStatus('打开失败：' + r.message, 'error');
+  }
+});
+$('btn-conv-another').addEventListener('click', async () => {
+  const f = await window.api.selectFile('选择文档');
+  if (f) await loadConvFile(f);
 });

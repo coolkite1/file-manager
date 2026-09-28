@@ -311,6 +311,142 @@ ipcMain.on('build:cancel', () => {
   if (buildJob) buildJob.kill();
 });
 
+// ---------- 文档转换（页面三：PDF ⇄ Word） ----------
+
+const mammoth = require('mammoth');
+const { Document, Packer, Paragraph, TextRun, HeadingLevel } = require('docx');
+const os = require('os');
+
+// 选择文档文件（pdf / docx）
+let convTestIndex = 0; // 自动化测试入口 FO_TEST_FILES 的取用游标
+ipcMain.handle('conv:selectFile', async (event) => {
+  // 自动化测试入口：设置 FO_TEST_FILES（"a.docx;b.pdf"）后按顺序返回预设文件
+  const testFiles = process.env.FO_TEST_FILES ? process.env.FO_TEST_FILES.split(';') : null;
+  if (testFiles) {
+    const f = testFiles[convTestIndex++ % testFiles.length];
+    return f || null;
+  }
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const r = await dialog.showOpenDialog(win, {
+    title: '选择 PDF 或 Word 文档',
+    properties: ['openFile'],
+    filters: [{ name: '文档', extensions: ['pdf', 'docx'] }],
+  });
+  return r.canceled ? null : r.filePaths[0];
+});
+
+// 文件基本信息
+ipcMain.handle('conv:info', async (event, filePath) => {
+  const ext = path.extname(filePath).toLowerCase();
+  return {
+    name: path.basename(filePath),
+    dir: path.dirname(filePath),
+    kind: ext === '.pdf' ? 'pdf' : ext === '.docx' ? 'docx' : 'unknown',
+    size: fs.statSync(filePath).size,
+  };
+});
+
+// 文件内容（base64，供界面预览 PDF 用）
+ipcMain.handle('conv:fileData', async (event, filePath) => {
+  return fs.readFileSync(filePath).toString('base64');
+});
+
+// pdf.js worker 源码（界面用 Blob URL 方式加载 worker）
+ipcMain.handle('conv:workerText', async () => {
+  const workerPath = path.join(__dirname, 'renderer', 'vendor', 'pdf.worker.mjs');
+  return fs.readFileSync(workerPath, 'utf8');
+});
+
+// Word 预览：docx → HTML（图片内联为 data URI）
+ipcMain.handle('conv:docxToHtml', async (event, filePath) => {
+  const { value } = await mammoth.convertToHtml(
+    { path: filePath },
+    {
+      convertImage: mammoth.images.imgElement((image) =>
+        image.read('base64').then((b64) => ({ src: `data:${image.contentType};base64,${b64}` }))
+      ),
+    }
+  );
+  return value;
+});
+
+// 提取 PDF 文字：逐页按行输出（供 PDF→Word 转换与检查使用）
+async function extractPdfLines(filePath) {
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const data = new Uint8Array(fs.readFileSync(filePath));
+  const doc = await pdfjs.getDocument({ data, isEvalSupported: false }).promise;
+  const pages = [];
+  for (let i = 1; i <= doc.numPages; i += 1) {
+    const page = await doc.getPage(i);
+    const content = await page.getTextContent();
+    const rows = new Map();
+    for (const it of content.items) {
+      const s = (it.str || '').trim();
+      if (!s) continue;
+      const y = Math.round(it.transform[5] / 5) * 5; // 按纵向坐标分组为行
+      if (!rows.has(y)) rows.set(y, []);
+      rows.get(y).push(s);
+    }
+    const lines = [...rows.keys()]
+      .sort((a, b) => b - a)
+      .map((y) => rows.get(y).join(' ').trim())
+      .filter(Boolean);
+    pages.push({ number: i, lines });
+  }
+  // 兼容 pdf.js 新旧 API：新版 destroy()，legacy 构建 cleanup()
+  if (typeof doc.destroy === 'function') await doc.destroy();
+  else if (typeof doc.cleanup === 'function') await doc.cleanup();
+  return pages;
+}
+
+// PDF → Word：文字版转换（图片与复杂排版不保留，界面已注明）
+// 输出到源文件同目录，同名时自动加序号，绝不覆盖
+ipcMain.handle('conv:pdfToDocx', async (event, { pdfPath }) => {
+  const outPath = await uniquePath(path.dirname(pdfPath), `${path.basename(pdfPath, '.pdf')}.docx`);
+  const pages = await extractPdfLines(pdfPath);
+  const children = [];
+  for (const pg of pages) {
+    children.push(new Paragraph({ text: `第 ${pg.number} 页`, heading: HeadingLevel.HEADING_2 }));
+    for (const line of pg.lines) {
+      children.push(new Paragraph({ children: [new TextRun(line)] }));
+    }
+  }
+  const doc = new Document({ sections: [{ children }] });
+  const buf = await Packer.toBuffer(doc);
+  fs.writeFileSync(outPath, buf);
+  return { ok: true, outPath, pages: pages.length, lines: pages.reduce((n, p) => n + p.lines.length, 0) };
+});
+
+// Word → PDF：docx → HTML（mammoth）→ 隐藏窗口 printToPDF；同名自动加序号
+ipcMain.handle('conv:docxToPdf', async (event, { docxPath }) => {
+  const outPath = await uniquePath(path.dirname(docxPath), `${path.basename(docxPath, '.docx')}.pdf`);
+  const { value: html } = await mammoth.convertToHtml(
+    { path: docxPath },
+    {
+      convertImage: mammoth.images.imgElement((image) =>
+        image.read('base64').then((b64) => ({ src: `data:${image.contentType};base64,${b64}` }))
+      ),
+    }
+  );
+  const wrapped = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+    body { font-family: "SimSun", "Microsoft YaHei", serif; font-size: 12pt; margin: 2cm; line-height: 1.6; }
+    img { max-width: 100%; }
+    table { border-collapse: collapse; } td, th { border: 1px solid #999; padding: 4px 8px; }
+  </style></head><body>${html}</body></html>`;
+  const tmpHtml = path.join(os.tmpdir(), `fo-conv-${Date.now()}.html`);
+  fs.writeFileSync(tmpHtml, wrapped, 'utf8');
+  const win = new BrowserWindow({ show: false, webPreferences: { sandbox: true } });
+  try {
+    await win.loadFile(tmpHtml);
+    const pdf = await win.webContents.printToPDF({ printBackground: true, pageSize: 'A4' });
+    fs.writeFileSync(outPath, pdf);
+    return { ok: true, outPath };
+  } finally {
+    win.destroy();
+    try { fs.unlinkSync(tmpHtml); } catch { /* 临时文件清理失败不影响结果 */ }
+  }
+});
+
 app.whenReady().then(() => {
   createWindow();
   app.on('activate', () => {

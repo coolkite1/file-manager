@@ -13,4 +13,12 @@ contextBridge.exposeInMainWorld('api', {
   cancelBuild: () => ipcRenderer.send('build:cancel'),
   onBuildLog: (cb) => ipcRenderer.on('build:log', (e, line) => cb(line)),
   onBuildDone: (cb) => ipcRenderer.on('build:done', (e, data) => cb(data)),
+  // 文档转换页
+  selectFile: (title) => ipcRenderer.invoke('conv:selectFile', title),
+  fileInfo: (filePath) => ipcRenderer.invoke('conv:info', filePath),
+  fileData: (filePath) => ipcRenderer.invoke('conv:fileData', filePath),
+  pdfWorkerText: () => ipcRenderer.invoke('conv:workerText'),
+  docxToHtml: (filePath) => ipcRenderer.invoke('conv:docxToHtml', filePath),
+  pdfToDocx: (pdfPath) => ipcRenderer.invoke('conv:pdfToDocx', { pdfPath }),
+  docxToPdf: (docxPath) => ipcRenderer.invoke('conv:docxToPdf', { docxPath }),
 });

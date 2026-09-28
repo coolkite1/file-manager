@@ -63,6 +63,28 @@ h1 { font-size: 22px; margin-bottom: 6px; }
   margin-top: 12px;
 }
 
+/* 文档转换页 */
+.conv-preview {
+  border: 1px solid #e4e7eb;
+  border-radius: 8px;
+  background: #fff;
+  padding: 16px 20px;
+  max-height: 420px;
+  overflow: auto;
+}
+.conv-preview canvas {
+  display: block;
+  margin: 0 auto 12px;
+  border: 1px solid #e4e7eb;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+.conv-preview.doc { font-family: "SimSun", "Microsoft YaHei", serif; }
+.conv-preview.doc p { margin: 8px 0; line-height: 1.7; }
+.conv-preview.doc h1, .conv-preview.doc h2, .conv-preview.doc h3 { margin: 14px 0 8px; }
+.conv-preview.doc table { border-collapse: collapse; }
+.conv-preview.doc td, .conv-preview.doc th { border: 1px solid #999; padding: 4px 8px; }
+.conv-preview.doc img { max-width: 100%; }
+
 .step {
   background: #fff;
   border: 1px solid #e4e7eb;

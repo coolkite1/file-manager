@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:; worker-src blob:" />
   <title>文件整理助手</title>
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -13,6 +13,7 @@
     <div class="tabs">
       <button id="tab-files" class="tab active">文件整理</button>
       <button id="tab-pack" class="tab">打包项目</button>
+      <button id="tab-conv" class="tab">文档转换</button>
     </div>
   </header>
 
@@ -120,8 +121,39 @@
       </section>
       <div id="pack-status" class="status"></div>
     </div>
+
+    <!-- 页面三：文档转换 -->
+    <div id="page-conv" hidden>
+      <section class="step">
+        <div class="row">
+          <label>① 选择文档</label>
+          <input id="conv-file" readonly placeholder="选择 PDF 或 Word（.docx）文件" />
+          <button id="btn-conv-select">选择文件</button>
+        </div>
+        <div class="row actions">
+          <button id="btn-conv-go" class="primary" disabled>② 转换为…</button>
+          <span class="hint" id="conv-hint"></span>
+        </div>
+      </section>
+
+      <section class="step" id="conv-preview-panel" hidden>
+        <h3>预览：<span id="conv-preview-title"></span></h3>
+        <div class="conv-preview" id="conv-preview"></div>
+      </section>
+
+      <section class="step" id="conv-result-panel" hidden>
+        <div class="summary" id="conv-result-text"></div>
+        <div class="row actions">
+          <button id="btn-conv-open" class="primary">打开所在文件夹</button>
+          <button id="btn-conv-preview" class="ghost">预览转换结果</button>
+          <button id="btn-conv-another" class="ghost">转换其他文件</button>
+        </div>
+      </section>
+      <div id="conv-status" class="status"></div>
+    </div>
   </main>
 
+  <script type="module" src="vendor/pdf.mjs"></script>
   <script src="renderer.js"></script>
 </body>
 </html>
