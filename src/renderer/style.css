@@ -69,7 +69,8 @@ h1 { font-size: 22px; margin-bottom: 6px; }
   border-radius: 8px;
   background: #fff;
   padding: 16px 20px;
-  max-height: 420px;
+  min-height: 460px;
+  max-height: calc(100vh - 320px);
   overflow: auto;
 }
 .conv-preview canvas {

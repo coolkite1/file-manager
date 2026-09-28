@@ -1,6 +1,6 @@
 {
   "name": "file-organizer",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "文件整理助手：选择文件夹、预览整理结果、确认后复制到新位置，原文件始终保留（Vibe Guide 桌面 App 示例）",
   "main": "src/main.js",
   "author": "vibecoder",
