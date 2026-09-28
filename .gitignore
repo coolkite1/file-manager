@@ -10,3 +10,6 @@ test-data/文档示例 (2).docx
 # 压缩解压测试产物
 test-data/source.zip
 test-data/source (2)/
+
+# Word 临时锁文件
+~$*
