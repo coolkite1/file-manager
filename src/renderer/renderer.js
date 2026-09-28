@@ -279,9 +279,11 @@ function switchTab(page) {
   $('tab-files').classList.toggle('active', page === 'files');
   $('tab-pack').classList.toggle('active', page === 'pack');
   $('tab-conv').classList.toggle('active', page === 'conv');
+  $('tab-zip').classList.toggle('active', page === 'zip');
   $('page-files').hidden = page !== 'files';
   $('page-pack').hidden = page !== 'pack';
   $('page-conv').hidden = page !== 'conv';
+  $('page-zip').hidden = page !== 'zip';
 }
 $('tab-files').addEventListener('click', () => switchTab('files'));
 $('tab-pack').addEventListener('click', () => switchTab('pack'));
@@ -510,4 +512,156 @@ $('btn-conv-open').addEventListener('click', async () => {
 $('btn-conv-another').addEventListener('click', async () => {
   const f = await window.api.selectFile('选择文档');
   if (f) await loadConvFile(f);
+});
+
+// ---------- 页面四：压缩解压（zip） ----------
+
+const zipState = { items: [], zipPath: null, lastOut: null };
+
+function setZipStatus(text, kind) {
+  const el = $('zip-status');
+  el.textContent = text;
+  el.className = 'status show ' + (kind || 'info');
+}
+
+function fmtSize(n) {
+  return n >= 1024 * 1024 ? (n / 1024 / 1024).toFixed(2) + ' MB' : (n / 1024).toFixed(1) + ' KB';
+}
+
+// 页签
+$('tab-zip').addEventListener('click', () => switchTab('zip'));
+
+// 压缩 / 解压 模式切换
+function switchZipMode(mode) {
+  $('zip-mode-compress').classList.toggle('active', mode === 'compress');
+  $('zip-mode-extract').classList.toggle('active', mode === 'extract');
+  $('zip-compress-panel').hidden = mode !== 'compress';
+  $('zip-extract-panel').hidden = mode !== 'extract';
+  $('zip-result-panel').hidden = true;
+}
+$('zip-mode-compress').addEventListener('click', () => switchZipMode('compress'));
+$('zip-mode-extract').addEventListener('click', () => switchZipMode('extract'));
+
+// 进度事件
+window.api.onZipProgress((d) => {
+  if (d.kind === 'compress') {
+    if (d.entry) $('zip-progress-text').textContent = '正在压缩：' + d.entry;
+    if (d.ratio) $('zip-progress-fill').style.width = Math.round(d.ratio * 100) + '%';
+  } else {
+    $('zip-extract-text').textContent = `已解压 ${d.done}/${d.total}${d.name ? '：' + d.name : ''}`;
+    if (d.total) $('zip-extract-fill').style.width = Math.round((d.done / d.total) * 100) + '%';
+  }
+});
+
+// 选择要压缩的内容
+$('btn-zip-pick').addEventListener('click', async () => {
+  const items = await window.api.zipSelectFiles();
+  if (!items || items.length === 0) return;
+  zipState.items = items;
+  const ul = $('zip-picked-list');
+  ul.textContent = '';
+  items.forEach((p) => {
+    const li = document.createElement('li');
+    li.textContent = p;
+    ul.append(li);
+  });
+  $('btn-zip-go').disabled = false;
+  $('zip-result-panel').hidden = true;
+  setZipStatus('');
+});
+
+// 开始压缩
+$('btn-zip-go').addEventListener('click', async () => {
+  $('btn-zip-go').disabled = true;
+  $('btn-zip-cancel').hidden = false;
+  $('zip-progress-wrap').hidden = false;
+  $('zip-progress-fill').style.width = '0%';
+  $('zip-progress-text').textContent = '';
+  setZipStatus('正在压缩……', 'info');
+  const r = await window.api.zipCompress(zipState.items);
+  $('btn-zip-cancel').hidden = true;
+  $('btn-zip-go').disabled = false;
+  if (r.ok) {
+    zipState.lastOut = r.outZip;
+    $('zip-result-text').textContent = `✔ 压缩完成：${r.outZip}（${fmtSize(r.size)}）`;
+    $('zip-result-panel').hidden = false;
+    setZipStatus('压缩完成', 'success');
+  } else {
+    setZipStatus(r.message || '压缩失败', 'error');
+  }
+});
+
+// 取消
+$('btn-zip-cancel').addEventListener('click', () => {
+  window.api.zipCancel();
+  setZipStatus('正在取消……', 'info');
+});
+
+// 选择 zip 文件并预览内容
+$('btn-zip-pick-file').addEventListener('click', async () => {
+  const p = await window.api.zipSelectZip();
+  if (!p) return;
+  zipState.zipPath = p;
+  $('zip-file').value = p;
+  $('zip-result-panel').hidden = true;
+  try {
+    const r = await window.api.zipList(p);
+    $('zip-list-summary').hidden = false;
+    $('zip-list-summary').textContent =
+      `共 ${r.count} 个条目，解压后约 ${fmtSize(r.totalSize)}（最多显示 20 条）`;
+    const ul = $('zip-entry-list');
+    ul.textContent = '';
+    r.entries.slice(0, 20).forEach((e) => {
+      const li = document.createElement('li');
+      li.textContent = e.name + (e.isDir ? '/' : '') + (e.size ? `（${fmtSize(e.size)}）` : '');
+      ul.append(li);
+    });
+    $('btn-zip-extract').disabled = false;
+    setZipStatus('');
+  } catch (err) {
+    setZipStatus('读取压缩包失败：' + err.message, 'error');
+  }
+});
+
+// 开始解压
+$('btn-zip-extract').addEventListener('click', async () => {
+  $('btn-zip-extract').disabled = true;
+  $('btn-zip-cancel2').hidden = false;
+  $('zip-extract-progress-wrap').hidden = false;
+  $('zip-extract-fill').style.width = '0%';
+  $('zip-extract-text').textContent = '';
+  setZipStatus('正在解压……', 'info');
+  const r = await window.api.zipExtract(zipState.zipPath);
+  $('btn-zip-cancel2').hidden = true;
+  $('btn-zip-extract').disabled = false;
+  if (r.cancelled) {
+    setZipStatus('已取消解压（已解压 ' + r.done + ' 个文件）。', 'error');
+    return;
+  }
+  if (r.outDir) {
+    zipState.lastOut = r.outDir;
+    $('zip-result-text').textContent = `✔ 解压完成：${r.outDir}（${r.done} 个文件）`;
+    $('zip-result-panel').hidden = false;
+    setZipStatus('解压完成', 'success');
+  } else {
+    setZipStatus(r.message || '解压失败', 'error');
+  }
+});
+
+// 取消解压
+$('btn-zip-cancel2').addEventListener('click', () => {
+  window.api.zipCancel();
+  setZipStatus('正在取消……', 'info');
+});
+
+// 打开所在文件夹 / 再来一次
+$('btn-zip-open').addEventListener('click', async () => {
+  if (zipState.lastOut) {
+    const r = await window.api.openFolder(zipState.lastOut);
+    if (!r.ok) setZipStatus('打开失败：' + r.message, 'error');
+  }
+});
+$('btn-zip-again').addEventListener('click', () => {
+  $('zip-result-panel').hidden = true;
+  setZipStatus('');
 });

@@ -21,4 +21,12 @@ contextBridge.exposeInMainWorld('api', {
   docxToHtml: (filePath) => ipcRenderer.invoke('conv:docxToHtml', filePath),
   pdfToDocx: (pdfPath) => ipcRenderer.invoke('conv:pdfToDocx', { pdfPath }),
   docxToPdf: (docxPath) => ipcRenderer.invoke('conv:docxToPdf', { docxPath }),
+  // 压缩解压页
+  zipSelectFiles: () => ipcRenderer.invoke('zip:selectFiles'),
+  zipSelectZip: () => ipcRenderer.invoke('zip:selectZip'),
+  zipList: (zipPath) => ipcRenderer.invoke('zip:list', zipPath),
+  zipCompress: (items) => ipcRenderer.invoke('zip:compress', { items }),
+  zipExtract: (zipPath) => ipcRenderer.invoke('zip:extract', { zipPath }),
+  zipCancel: () => ipcRenderer.send('zip:cancel'),
+  onZipProgress: (cb) => ipcRenderer.on('zip:progress', (e, data) => cb(data)),
 });

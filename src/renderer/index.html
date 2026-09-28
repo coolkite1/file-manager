@@ -14,6 +14,7 @@
       <button id="tab-files" class="tab active">文件整理</button>
       <button id="tab-pack" class="tab">打包项目</button>
       <button id="tab-conv" class="tab">文档转换</button>
+      <button id="tab-zip" class="tab">压缩解压</button>
     </div>
   </header>
 
@@ -150,6 +151,64 @@
         </div>
       </section>
       <div id="conv-status" class="status"></div>
+    </div>
+
+    <!-- 页面四：压缩解压 -->
+    <div id="page-zip" hidden>
+      <div class="tabs sub-tabs">
+        <button id="zip-mode-compress" class="tab active">压缩</button>
+        <button id="zip-mode-extract" class="tab">解压</button>
+      </div>
+
+      <!-- 压缩 -->
+      <div id="zip-compress-panel">
+        <section class="step">
+          <div class="row">
+            <label>① 选择要压缩的内容</label>
+            <button id="btn-zip-pick" class="primary">选择文件/文件夹（可多选）</button>
+            <span class="hint">压缩为 zip 格式，Windows 自带打开支持</span>
+          </div>
+          <ul id="zip-picked-list" class="file-list"></ul>
+          <div class="row actions">
+            <button id="btn-zip-go" class="primary" disabled>② 开始压缩</button>
+            <button id="btn-zip-cancel" class="danger" hidden>取消</button>
+          </div>
+          <div class="progress-wrap" id="zip-progress-wrap" hidden>
+            <div class="progress-bar"><div class="progress-fill" id="zip-progress-fill"></div></div>
+            <span class="hint" id="zip-progress-text"></span>
+          </div>
+        </section>
+      </div>
+
+      <!-- 解压 -->
+      <div id="zip-extract-panel" hidden>
+        <section class="step">
+          <div class="row">
+            <label>① 选择 zip 文件</label>
+            <input id="zip-file" readonly placeholder="选择 .zip 压缩包" />
+            <button id="btn-zip-pick-file">选择文件</button>
+          </div>
+          <div class="summary" id="zip-list-summary" hidden></div>
+          <ul id="zip-entry-list" class="file-list"></ul>
+          <div class="row actions">
+            <button id="btn-zip-extract" class="primary" disabled>② 解压到同目录</button>
+            <button id="btn-zip-cancel2" class="danger" hidden>取消</button>
+          </div>
+          <div class="progress-wrap" id="zip-extract-progress-wrap" hidden>
+            <div class="progress-bar"><div class="progress-fill" id="zip-extract-fill"></div></div>
+            <span class="hint" id="zip-extract-text"></span>
+          </div>
+        </section>
+      </div>
+
+      <section class="step" id="zip-result-panel" hidden>
+        <div class="summary" id="zip-result-text"></div>
+        <div class="row actions">
+          <button id="btn-zip-open" class="primary">打开所在文件夹</button>
+          <button id="btn-zip-again" class="ghost">再来一次</button>
+        </div>
+      </section>
+      <div id="zip-status" class="status"></div>
     </div>
   </main>
 

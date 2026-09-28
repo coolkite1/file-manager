@@ -281,7 +281,8 @@ ipcMain.handle('build:start', async (event, { projectDir, buildCmd, needsInstall
     const pump = (buf) => String(buf).replace(/\r?\n$/, '').split(/\r?\n/).forEach(sendLog);
     child.stdout.on('data', pump);
     child.stderr.on('data', pump);
-    child.on('close', (code) => { buildJob = null; resolve(code ?? -1); });
+    // 用 exit 而非 close：Windows 下孙进程可能一直持有管道，close 永不触发
+    child.on('exit', (code) => { buildJob = null; resolve(code ?? -1); });
     child.on('error', (err) => { buildJob = null; sendLog('启动失败: ' + err.message); resolve(-1); });
   });
 
@@ -444,6 +445,198 @@ ipcMain.handle('conv:docxToPdf', async (event, { docxPath }) => {
   } finally {
     win.destroy();
     try { fs.unlinkSync(tmpHtml); } catch { /* 临时文件清理失败不影响结果 */ }
+  }
+});
+
+// ---------- 压缩解压（页面四：zip） ----------
+
+const { ZipArchive } = require('archiver'); // archiver 8：工厂函数改为 ZipArchive 类
+const yauzl = require('yauzl');
+const iconv = require('iconv-lite');
+
+let zipJob = { cancelled: false }; // 当前压缩/解压任务状态（供取消）
+
+// 按 zip 规范解码条目名：UTF-8 标志位优先；老工具生成的 GBK 压缩包按 GBK 解码
+function decodeZipName(entry) {
+  const raw = Buffer.isBuffer(entry.fileName) ? entry.fileName : Buffer.from(entry.fileName);
+  const isUtf8 = (entry.generalPurposeBitFlag & 0x800) !== 0;
+  return isUtf8 ? raw.toString('utf8') : iconv.decode(raw, 'gbk');
+}
+
+// 是否为目录条目（decodeStrings:false 时 fileName 是 Buffer，不能直接调 endsWith）
+function isDirEntry(entry) {
+  const raw = Buffer.isBuffer(entry.fileName) ? entry.fileName : Buffer.from(entry.fileName);
+  return raw.length > 0 && raw[raw.length - 1] === 0x2f; // 0x2f = '/'
+}
+
+// 选择要压缩的文件/文件夹（可多选）
+let zipTestIndex = 0; // 自动化测试入口 FO_TEST_ZIP_SRC 的取用游标
+ipcMain.handle('zip:selectFiles', async (event) => {
+  const test = process.env.FO_TEST_ZIP_SRC ? process.env.FO_TEST_ZIP_SRC.split(';') : null;
+  if (test) {
+    const batch = test[zipTestIndex++ % test.length];
+    return batch ? batch.split('|') : [];
+  }
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const r = await dialog.showOpenDialog(win, {
+    title: '选择要压缩的文件或文件夹（可多选）',
+    properties: ['openFile', 'openDirectory', 'multiSelections'],
+  });
+  return r.canceled ? [] : r.filePaths;
+});
+
+// 选择要解压的 zip 文件
+let zipFileTestIndex = 0; // 自动化测试入口 FO_TEST_ZIP_FILE 的取用游标
+ipcMain.handle('zip:selectZip', async (event) => {
+  const test = process.env.FO_TEST_ZIP_FILE ? process.env.FO_TEST_ZIP_FILE.split(';') : null;
+  if (test) return test[zipFileTestIndex++ % test.length] || null;
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const r = await dialog.showOpenDialog(win, {
+    title: '选择要解压的 zip 文件',
+    properties: ['openFile'],
+    filters: [{ name: 'zip 压缩包', extensions: ['zip'] }],
+  });
+  return r.canceled ? null : r.filePaths[0];
+});
+
+// 预览压缩包内容（只读）
+ipcMain.handle('zip:list', async (event, zipPath) => {
+  const entries = await new Promise((resolve, reject) => {
+    yauzl.open(zipPath, { lazyEntries: true, decodeStrings: false }, (err, zf) => {
+      if (err) return reject(err);
+      const list = [];
+      zf.on('entry', (entry) => {
+        const name = decodeZipName(entry);
+        list.push({
+          name: name.replace(/\\/g, '/'),
+          size: entry.uncompressedSize,
+          isDir: isDirEntry(entry),
+        });
+        zf.readEntry();
+      });
+      zf.on('end', () => resolve(list));
+      zf.on('error', reject);
+      zf.readEntry();
+    });
+  });
+  return {
+    entries,
+    count: entries.length,
+    totalSize: entries.reduce((n, e) => n + e.size, 0),
+  };
+});
+
+// 压缩：支持多选；输出到第一项同目录，同名自动加序号；进度经 zip:progress 事件推送
+ipcMain.handle('zip:compress', async (event, { items }) => {
+  if (!Array.isArray(items) || items.length === 0) return { ok: false, message: '没有选择要压缩的内容' };
+  const base = items.length === 1 ? path.basename(items[0]) : '压缩包';
+  const outZip = await uniquePath(path.dirname(items[0]), `${base}.zip`);
+  const wc = event.sender;
+  zipJob = { cancelled: false };
+  const send = (data) => { if (!wc.isDestroyed()) wc.send('zip:progress', { kind: 'compress', ...data }); };
+  try {
+    const result = await new Promise((resolve, reject) => {
+      const output = fs.createWriteStream(outZip);
+      const archive = new ZipArchive({ zlib: { level: 6 } });
+      zipJob.archive = archive;
+      output.on('close', () => resolve({ ok: true, outZip, size: archive.pointer() }));
+      output.on('error', reject);
+      archive.on('error', reject);
+      archive.on('progress', (p) => send({
+        processed: p.fs.processedBytes,
+        total: p.fs.totalBytes,
+        ratio: p.fs.totalBytes ? p.fs.processedBytes / p.fs.totalBytes : 0,
+      }));
+      archive.on('entry', (e) => send({ entry: e.name.replace(/\\/g, '/') }));
+      archive.pipe(output);
+      for (const item of items) {
+        const st = fs.statSync(item);
+        if (st.isDirectory()) archive.directory(item, path.basename(item));
+        else archive.file(item, { name: path.basename(item) });
+      }
+      archive.finalize();
+    });
+    return result;
+  } catch (err) {
+    if (zipJob.cancelled) return { ok: false, cancelled: true, outZip, message: '已取消压缩' };
+    return { ok: false, outZip, message: err.message };
+  }
+});
+
+// 解压：输出到压缩包同目录的同名文件夹，同名自动加序号；
+// 逐条写入、路径穿越防护、可取消；进度经 zip:progress 事件推送。
+// yauzl 惰性模式要求：openReadStream 必须在 entry 回调内调用、流结束后再 readEntry()
+ipcMain.handle('zip:extract', async (event, { zipPath }) => {
+  const base = path.basename(zipPath, '.zip');
+  const outDir = await uniquePath(path.dirname(zipPath), base);
+  const wc = event.sender;
+  zipJob = { cancelled: false };
+  const send = (data) => { if (!wc.isDestroyed()) wc.send('zip:progress', { kind: 'extract', ...data }); };
+  try {
+    // 先读一遍中央目录拿总数（供进度显示）
+    const list = await new Promise((resolve, reject) => {
+      yauzl.open(zipPath, { lazyEntries: true, decodeStrings: false }, (err, zf) => {
+        if (err) return reject(err);
+        const entries = [];
+        zf.on('entry', (entry) => { entries.push(entry); zf.readEntry(); });
+        zf.on('error', reject);
+        zf.on('end', () => resolve(entries));
+        zf.readEntry();
+      });
+    });
+    const total = list.filter((e) => !isDirEntry(e)).length;
+    const result = await new Promise((resolve, reject) => {
+      yauzl.open(zipPath, { lazyEntries: true, decodeStrings: false }, (err, zf) => {
+        if (err) return reject(err);
+        const outRoot = path.resolve(outDir);
+        let done = 0;
+        const processEntry = async (entry) => {
+          try {
+            if (zipJob.cancelled) return resolve({ cancelled: true, done, total, outDir });
+            const name = decodeZipName(entry).replace(/\\/g, '/');
+            const target = path.resolve(outRoot, name);
+            // 防护：目标路径必须位于解压目录之内（防 ../ 穿越与绝对路径），越界条目跳过
+            if (target !== outRoot && !target.startsWith(outRoot + path.sep)) {
+              zf.readEntry();
+              return;
+            }
+            if (isDirEntry(entry)) {
+              await fsp.mkdir(target, { recursive: true });
+              zf.readEntry();
+              return;
+            }
+            await fsp.mkdir(path.dirname(target), { recursive: true });
+            await new Promise((res, rej) => {
+              zf.openReadStream(entry, (e2, rs) => {
+                if (e2) return rej(e2);
+                const ws = fs.createWriteStream(target);
+                rs.pipe(ws);
+                ws.on('close', res);
+                ws.on('error', rej);
+              });
+            });
+            done += 1;
+            send({ done, total, name });
+            zf.readEntry();
+          } catch (e) { reject(e); }
+        };
+        zf.on('entry', processEntry);
+        zf.on('error', reject);
+        zf.on('end', () => resolve({ cancelled: false, done, total, outDir }));
+        zf.readEntry();
+      });
+    });
+    return result;
+  } catch (err) {
+    return { cancelled: false, ok: false, message: err.message };
+  }
+});
+
+// 取消压缩/解压
+ipcMain.on('zip:cancel', () => {
+  zipJob.cancelled = true;
+  if (zipJob.archive) {
+    try { zipJob.archive.abort(); } catch { /* 忽略中止异常 */ }
   }
 });
 

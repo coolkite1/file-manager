@@ -16,17 +16,22 @@ fs.mkdirSync(SHOT_DIR, { recursive: true });
 const DOCX_FIXTURE = path.join(APP_DIR, 'test-data', '文档示例.docx');
 const PDF_FIXTURE = DOCX_FIXTURE.replace(/\.docx$/, '.pdf');
 const ROUNDTRIP_DOCX = DOCX_FIXTURE.replace(/\.docx$/, ' (2).docx');
+const ZIP_FIXTURE = path.join(APP_DIR, 'test-data', 'source.zip');
+const ZIP_EXTRACT_DIR = path.join(APP_DIR, 'test-data', 'source (2)');
 const env = {
   ...process.env,
   FO_TEST_DIRS: `${SOURCE};${TARGET};${APP_DIR}`,
   FO_TEST_FILES: `${DOCX_FIXTURE};${PDF_FIXTURE}`,
+  FO_TEST_ZIP_SRC: SOURCE,
+  FO_TEST_ZIP_FILE: ZIP_FIXTURE,
 };
 delete env.ELECTRON_RUN_AS_NODE;
 
-// 清理上次测试的转换产物
-for (const f of [PDF_FIXTURE, ROUNDTRIP_DOCX]) {
+// 清理上次测试的产物
+for (const f of [PDF_FIXTURE, ROUNDTRIP_DOCX, ZIP_FIXTURE]) {
   if (fs.existsSync(f)) fs.rmSync(f);
 }
+if (fs.existsSync(ZIP_EXTRACT_DIR)) fs.rmSync(ZIP_EXTRACT_DIR, { recursive: true, force: true });
 
 const failures = [];
 const shot = async (name) => {
@@ -222,7 +227,45 @@ await page.waitForFunction(
 );
 check('PDF→Word 生成（自动加序号）', fs.existsSync(ROUNDTRIP_DOCX));
 
-console.log('11) 关闭应用');
+console.log('11) 压缩解压页 ...');
+await page.evaluate(() => document.getElementById('tab-zip').click());
+// 压缩 test-data/source
+await page.evaluate(() => document.getElementById('btn-zip-pick').click());
+await page.waitForFunction(() => document.querySelectorAll('#zip-picked-list li').length > 0);
+check('已选择压缩内容', (await page.evaluate(() => document.querySelectorAll('#zip-picked-list li').length)) === 1);
+await page.evaluate(() => document.getElementById('btn-zip-go').click());
+await page.waitForFunction(
+  () => document.getElementById('zip-status').textContent.includes('压缩完成'),
+  null,
+  { timeout: 60000 }
+);
+check('生成 zip 文件', fs.existsSync(ZIP_FIXTURE));
+await shot('09-压缩完成.png');
+
+// 解压
+await page.evaluate(() => document.getElementById('zip-mode-extract').click());
+await page.evaluate(() => document.getElementById('btn-zip-pick-file').click());
+await page.waitForFunction(() => document.getElementById('zip-file').value !== '');
+await page.waitForFunction(
+  () => document.getElementById('zip-list-summary').textContent.includes('共'),
+  null,
+  { timeout: 30000 }
+);
+const zipSummary = await page.evaluate(() => document.getElementById('zip-list-summary').textContent);
+check('压缩包内容预览', zipSummary.includes('条目'), zipSummary.slice(0, 60));
+await page.evaluate(() => document.getElementById('btn-zip-extract').click());
+await page.waitForFunction(
+  () => document.getElementById('zip-status').textContent.includes('解压完成'),
+  null,
+  { timeout: 60000 }
+);
+const zipResult = await page.evaluate(() => document.getElementById('zip-result-text').textContent);
+check('解压完成并返回目录', zipResult.includes('解压完成'), zipResult.slice(0, 60));
+check('解压目录存在（同名自动加序号）', fs.existsSync(ZIP_EXTRACT_DIR));
+check('解压内容完整（含子文件夹）', fs.existsSync(path.join(ZIP_EXTRACT_DIR, 'source', '旅游', '海边.jpg')));
+await shot('10-解压完成.png');
+
+console.log('12) 关闭应用');
 await app.close();
 
 console.log(failures.length === 0 ? '\n全部通过' : `\n失败 ${failures.length} 项: ${failures.join(', ')}`);
