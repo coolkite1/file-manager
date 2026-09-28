@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'" />
+  <title>文件整理助手</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>📁 文件整理助手</h1>
+    <p class="sub">选择文件夹 → 预览整理结果 → 确认后复制到新位置。原文件始终保留。</p>
+  </header>
+
+  <main>
+    <!-- 第一步：选择文件夹 -->
+    <section class="step" id="step-select">
+      <div class="row">
+        <label>① 要整理的文件夹</label>
+        <input id="source-dir" readonly placeholder="点击右侧按钮选择文件夹" />
+        <button id="btn-source">选择文件夹</button>
+      </div>
+      <div class="row">
+        <label>② 结果保存到</label>
+        <input id="target-dir" readonly placeholder="选择整理结果的保存位置" />
+        <button id="btn-target">选择文件夹</button>
+      </div>
+      <div class="row actions">
+        <button id="btn-preview" class="primary" disabled>③ 预览整理结果</button>
+        <span class="hint">只复制，不移动、不删除；原文件不会被修改</span>
+      </div>
+    </section>
+
+    <!-- 第二步：预览 -->
+    <section class="step" id="step-preview" hidden>
+      <div class="summary" id="summary"></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>原文件</th><th>分类</th><th>整理后位置</th><th>备注</th></tr>
+          </thead>
+          <tbody id="preview-body"></tbody>
+        </table>
+      </div>
+      <div class="row actions">
+        <button id="btn-execute" class="primary">确认整理（复制到新位置）</button>
+        <button id="btn-cancel" class="danger" hidden>取消整理</button>
+        <button id="btn-reset" class="ghost">重新选择</button>
+      </div>
+    </section>
+
+    <!-- 第三步：结果 -->
+    <section class="step" id="step-result" hidden>
+      <h2 id="result-title"></h2>
+      <ul id="result-list"></ul>
+      <div class="row actions">
+        <button id="btn-open-target" class="primary">打开结果文件夹</button>
+        <button id="btn-restart" class="ghost">再来一次</button>
+      </div>
+    </section>
+
+    <div id="status" class="status"></div>
+  </main>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "name": "file-organizer",
+  "version": "0.1.0",
+  "description": "文件整理助手：选择文件夹、预览整理结果、确认后复制到新位置，原文件始终保留（Vibe Guide 桌面 App 示例）",
+  "main": "src/main.js",
+  "author": "vibecoder",
+  "license": "MIT",
+  "scripts": {
+    "start": "node scripts/start.js",
+    "dist": "node scripts/dist.js"
+  },
+  "devDependencies": {
+    "electron": "^44.4.5",
+    "electron-builder": "^26.15.3",
+    "playwright-core": "^1.63.0"
+  }
+}

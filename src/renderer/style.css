@@ -1,0 +1,90 @@
+/* 文件整理助手界面样式 */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+  background: #f5f7fa;
+  color: #1f2933;
+  padding: 24px 32px 40px;
+  font-size: 14px;
+}
+
+header { margin-bottom: 20px; }
+h1 { font-size: 22px; margin-bottom: 6px; }
+.sub { color: #52606d; }
+
+.step {
+  background: #fff;
+  border: 1px solid #e4e7eb;
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.row:last-child { margin-bottom: 0; }
+.row label { width: 150px; flex-shrink: 0; color: #3e4c59; }
+.row input {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid #cbd2d9;
+  border-radius: 6px;
+  font-size: 13px;
+  background: #fafbfc;
+  color: #52606d;
+}
+
+button {
+  padding: 8px 16px;
+  border: 1px solid #cbd2d9;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 14px;
+  font-family: inherit;
+  white-space: nowrap;
+}
+button:hover:not(:disabled) { background: #f0f4f8; }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+button.primary { background: #1a73e8; border-color: #1a73e8; color: #fff; }
+button.primary:hover:not(:disabled) { background: #1765cc; }
+button.danger { background: #d93025; border-color: #d93025; color: #fff; }
+button.danger:hover:not(:disabled) { background: #b3261e; }
+button.ghost { background: transparent; }
+
+.actions { margin-top: 14px; }
+.hint { color: #7b8794; font-size: 12px; }
+
+.summary {
+  background: #e8f0fe;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  color: #1a56b0;
+}
+
+.table-wrap { max-height: 300px; overflow: auto; border: 1px solid #e4e7eb; border-radius: 8px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #eef1f4; }
+th { background: #fafbfc; color: #52606d; position: sticky; top: 0; }
+tr:last-child td { border-bottom: none; }
+td.name { word-break: break-all; }
+td.tag { color: #1a73e8; white-space: nowrap; }
+td.warn { color: #b3261e; white-space: nowrap; }
+
+.status {
+  margin-top: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  display: none;
+}
+.status.show { display: block; }
+.status.info { background: #e8f0fe; color: #1a56b0; }
+.status.error { background: #fce8e6; color: #b3261e; }
+.status.success { background: #e6f4ea; color: #137333; }
+
+#result-title { font-size: 16px; margin-bottom: 10px; }
+#result-list { list-style: none; }
+#result-list li { padding: 3px 0; color: #3e4c59; word-break: break-all; }
+#result-list li.ok::before { content: "✔ "; color: #137333; }
+#result-list li.err::before { content: "✘ "; color: #b3261e; }
